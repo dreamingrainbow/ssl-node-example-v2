@@ -1,76 +1,59 @@
-const fs = require("fs");
-const path = require("path");
-const https = require("https");
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const constants = require("constants");
-
-const Config = {
-  host: "::",
-  whitelist: ["www.domain.com", "domain.com", "localhost"],
-  certificate: "ssl/certificate.crt",
-  ca_bundle: "ssl/ca_bundle.crt",
-  privateKey: "ssl/private.key"
-};
-
-const corsOptionsDelegate = function(request, callback) {
-  let corsOptions;
-  if (Config.whitelist.indexOf(request.header("Origin")) !== -1) {
-    // reflect (enable) the requested origin in the CORS response
-    corsOptions = { origin: true };
-  } else {
-    // disable CORS for this request
-    corsOptions = { origin: false };
-  }
-  // callback expects two parameters: error and options
-  callback(null, corsOptions);
-};
-
-const server = express();
-server.use(cors(corsOptionsDelegate), bodyParser.json());
-
-server.get("/", (req, res, next) => {
-  res.send("<h1>Hello World</h1>");
+const readline = require("readline");
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
 });
-
-let privateKeyFile = undefined;
-if (fs.existsSync(Config.privateKey))
-  privateKeyFile = fs.readFileSync(Config.privateKey, "utf8");
-
-let certificateFile = undefined;
-if (fs.existsSync(Config.certificate))
-  certificateFile = fs.readFileSync(Config.certificate, "utf8");
-
-let caBundleFile = undefined;
-if (fs.existsSync(Config.ca_bundle))
-  caBundleFile = fs.readFileSync(Config.ca_bundle, "utf8");
-
-if (privateKeyFile && certificateFile && caBundleFile) {
-  const credentials = {
-    cert: certificateFile,
-    ca: caBundleFile,
-    key: privateKeyFile,
-    secureOptions: constants.SSL_OP_NO_SSLv3 | constants.SSL_OP_NO_SSLv2
-  };
-  Config.port = '443';
-  const httpsServer = https.createServer(credentials, server);
-  const serverHttpsApp = httpsServer.listen(Config.port, Config.host, () => {
-    console.log(
-      "Secure Server listening on : \n\t" +
-        serverHttpsApp.address().address +
-        ":" +
-        serverHttpsApp.address().port
-    );
-  });
-} else {
-  Config.port = '3000';
-  const serverApp = server.listen(Config.port, Config.host, () => {
-    console.log(
-      "Server listening on : \n\t" +
-        serverApp.address().address +
-        ":" +
-        serverApp.address().port
-    );
-  });
+rl._writeToOutput = function _writeToOutput(stringToWrite) {
+  if (rl.stdoutMuted) rl.output.write("*");
+  else rl.output.write(stringToWrite);
+};
+function help() {
+  return {
+    protocol : 
+    [
+      "Select Your Server Protocol(s)\n",
+      "Enter one of: http | https | both \n",
+      "Example(s) :",
+      "https\tStarts the Secure Server.\n",
+      "s\tAlso starts the Secure Server.\n",
+      "both\tStart both the secure and standard servers.\n",
+      "h\tOnly start the standard server.\n\n",
+    ],
+    
 }
+function main() {
+    console.log(...help().protocol);
+    //TODO: Add Command Line Argument ByBass
+    return new Promise((resolve, reject) => {
+      rl.stdoutMuted = false;
+      rl.question("Enter Server Protocol (h)ttp|http(s)|(b)oth: \n", protocol => {
+        if((protocol.substr(0, 1).toLowerCase() !== 'h' 
+            && protocol.substr(0, 1).toLowerCase() !== 'b' 
+            &&  protocol.substr(protocol.length - 1, 1).toLowerCase() !=='s') === true) {
+          reject(main());
+        }
+        if(protocol.substr(0, 1).toLowerCase() === 'h' && protocol.substr(protocol.length - 1, 1).toLowerCase() ==='s') {
+          resolve('https');
+        } else if(protocol.substr(0, 1).toLowerCase() === 'b') {
+          resolve('both');
+        } else {
+          resolve('http');
+        }
+      });
+      rl.stdoutMuted = false;
+    });
+};
+main().then(protocol => {
+  const port = '443::80';
+  const { spawn } = require('child_process');
+  const child = spawn('node', ['server.js', protocol, port], {
+    detached: true,
+    stdio: 'ignore'
+  });
+  console.log('Server started. PID : ' ,  child.pid);
+  child.unref();
+  process.exit();
+}).catch(error => {
+  console.log('Ooops. Something went wrong trying to read input from the command line.');
+  return main();
+});
